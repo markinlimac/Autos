@@ -3,11 +3,12 @@ from PyPDF2 import PdfFileReader
 import requests, sys, time, os
 import time
 from datetime import datetime
+from socket import error as SocketError
+import errno
 
 #class AutosJuridico():
 
 def get(path, search):
-  print("")
 
   url = 'http://www.cnj.jus.br/dje/jsp/dje/DownloadDeDiario.jsp?dj=DJ{}_{}-ASSINADO.PDF&statusDoDiario=ASSINADO'.format(numDj, anoAtual)
   response = requests.get(url)
@@ -20,123 +21,153 @@ def get(path, search):
       contador = contador + 1
   if contador == 40:
     print("Este arquivo nao existe!")
+    print("")
     pass
   else:
-    #print(' ')
-    print('baixando')
-    urllib.request.urlretrieve(url, "DJ-{}-{}.pdf".format(numDj, anoAtual))
-    get_info(path, search)
-
-def get_info(path, search):
-  with open(path, 'rb') as f:
-    pdf = PdfFileReader(f)
-    info = pdf.getDocumentInfo()
-    number_of_pages = pdf.getNumPages()
-
-    #print(info)
-    print('')
-
-    author = info.author
-    creator = info.creator
-    producer = info.producer
-    subject = info.subject
-    title = info.title
-  text_extractor(path, number_of_pages, search)
-
-def text_extractor(path, number_of_pages, search):
-  with open(path, 'rb') as f:
-    pdf = PdfFileReader(f)
-
     try:
-      arquivo = open("DJ-{}-{}.txt".format(numDj, anoAtual), 'r+')
-    except FileNotFoundError:
-      arquivo = open("DJ-{}-{}.txt".format(numDj, anoAtual), 'w+')
+        response = urllib.request.urlretrieve(url, "DJ-{}-{}.pdf".format(numDj, anoAtual))
+        print('baixado')
+        text_extractor(path, search)
+    except SocketError as e:
+        if e.errno != errno.ECONNRESET:
+            raise # Not error we are looking for
+        print('excessao')
+        pass # Handle error here.
 
-    for numPage in range(number_of_pages):
-      page = pdf.getPage(numPage)
-      #print(page) #informaçao da pagina
-      #print('')
-      #print('Page type: {}'.format(str(type(page))))
-      #print('')
+def text_extractor(path, search):
+    with open(path, 'rb') as f:
+        pdf = PdfFileReader(f)
+        number_of_pages = pdf.getNumPages()
 
-      text = page.extractText()
-      arquivo.write(text)
-      #print(text)
-      #print('')
+        try:
+            arquivo = open("DJ-{}-{}.txt".format(numDj, anoAtual), 'r+')
+        except FileNotFoundError:
+            arquivo = open("DJ-{}-{}.txt".format(numDj, anoAtual), 'w+')
 
-    arquivo.close()
-  search_word(path, search)
+        for numPage in range(number_of_pages):
+            page = pdf.getPage(numPage)
+            text = page.extractText()
+            arquivo.write(text)
+
+        arquivo.close()
+        get_dataDj(path, search)
 
 def search_word(path, search):
-  datafile = open("DJ-{}-{}.txt".format(numDj,anoAtual), 'r+')
-  i = 0
-  for line in datafile:
-    i += 1
-    if i == 4:
-      mes_ext = {'janeiro': '1', 'fevereiro': '2', 'março': '3', 'abril': '4', 'maio': '5', 'junho': '6', 'julho': '7', 'agosto': '8', 'setembro': '9', 'outubro': '10', 'novembro': '11', 'dezembro': '12'}
-      date = line.split(',')
-      print(date)
-      date = date[2].strip()
-      print(date)
-      dia, separador, mes, separador, ano = date.split(' ')
-      print('{}/{}/{}'.format(dia, mes_ext[mes], ano))
-      print(data_process)
-      if int(ano) < int(year):
-        print('Este processo ainda nao havia sido criado! Finalizando programa')
-        datafile.close()
+    datafile = open("DJ-{}-{}.txt".format(numDj,anoAtual), 'r+')
+    for line in datafile:
+        if search in line:
+            found = True
+            break
+        else:
+            found = False
+    datafile.close()
+    if found == True:
+        print('Encontrado o processo {}'.format(search))
         local = os.getcwd()
         dir = os.listdir(local)
         for file in dir:
-            if (file == "DJ-{}-{}.txt".format(numDj,anoAtual) or file == "DJ-{}-{}.pdf".format(numDj,anoAtual)):
-              os.remove(file)
-              print("arquivo removido com sucesso!")
-              print("")
-        sys.exit()
-      elif int(mes_ext[mes]) < int(month) and int(ano) <= int(year):
-        print('Este processo ainda nao havia sido criado! Finalizando programa')
-        datafile.close()
-        local = os.getcwd()
-        dir = os.listdir(local)
-        for file in dir:
-            if (file == "DJ-{}-{}.txt".format(numDj,anoAtual) or file == "DJ-{}-{}.pdf".format(numDj,anoAtual)):
-              os.remove(file)
-              print("arquivo removido com sucesso!")
-              print("")
-        sys.exit()
-      elif int(dia) < int(day) and int(mes_ext[mes]) <= int(month) and int(ano) <= int(year):
-        print('Este processo ainda nao havia sido criado! Finalizando programa')
-        datafile.close()
-        local = os.getcwd()
-        dir = os.listdir(local)
-        for file in dir:
-            if (file == "DJ-{}-{}.txt".format(numDj,anoAtual) or file == "DJ-{}-{}.pdf".format(numDj,anoAtual)):
-              os.remove(file)
-              print("arquivo removido com sucesso!")
-              print("")
-        sys.exit()
-    if search in line:
-      found = True
-      break
+            if (file == "DJ-{}-{}.txt".format(numDj,anoAtual)):
+                os.remove(file)
     else:
-      found = False
+        print('Nao existe esse processo nesse DJ')
+        local = os.getcwd()
+        dir = os.listdir(local)
+        for file in dir:
+            if (file == "DJ-{}-{}.txt".format(numDj,anoAtual) or file == "DJ-{}-{}.pdf".format(numDj,anoAtual)):
+                os.remove(file)
+                print("arquivo removido com sucesso!")
 
-  datafile.close()
-  if found == True:
-    print('Encontrado o processo {}'.format(search))
-    local = os.getcwd()
-    dir = os.listdir(local)
-    for file in dir:
-        if (file == "DJ-{}-{}.txt".format(numDj,anoAtual)):
-          os.remove(file)
-  else:
-    print('Nao existe esse processo nesse DJ')
-    local = os.getcwd()
-    dir = os.listdir(local)
-    for file in dir:
-      if (file == "DJ-{}-{}.txt".format(numDj,anoAtual) or file == "DJ-{}-{}.pdf".format(numDj,anoAtual)):
-        os.remove(file)
-        print("arquivo removido com sucesso!")
-        print("")
+def get_dataDj(path, search):
+    datafile = open("DJ-{}-{}.txt".format(numDj,anoAtual), 'r+')
+    mes_ext = {'janeiro': '1', 'fevereiro': '2', 'março': '3', 'abril': '4', 'maio': '5', 'junho': '6', 'julho': '7', 'agosto': '8', 'setembro': '9', 'outubro': '10', 'novembro': '11', 'dezembro': '12'}
+    numeroLinha = 0
+    for line in datafile:
+        numeroLinha += 1
+        if numeroLinha == 3:
+            try:
+                date = line.split(',')
+                date = date[2].strip()
+                dia, separador, mes, separador, ano = date.split(' ')
+                print('{}/{}/{}'.format(dia, mes_ext[mes], ano))
+                print(data_process)
+                if int(ano) < int(year):
+                    print('Este processo ainda nao havia sido criado! Finalizando programa')
+                    datafile.close()
+                    local = os.getcwd()
+                    dir = os.listdir(local)
+                    for file in dir:
+                        if (file == "DJ-{}-{}.txt".format(numDj,anoAtual) or file == "DJ-{}-{}.pdf".format(numDj,anoAtual)):
+                            os.remove(file)
+                            print("arquivo removido com sucesso!")
+                            print("")
+                    sys.exit()
+                elif int(mes_ext[mes]) < int(month) and int(ano) <= int(year):
+                    print('Este processo ainda nao havia sido criado! Finalizando programa')
+                    datafile.close()
+                    local = os.getcwd()
+                    dir = os.listdir(local)
+                    for file in dir:
+                        if (file == "DJ-{}-{}.txt".format(numDj,anoAtual) or file == "DJ-{}-{}.pdf".format(numDj,anoAtual)):
+                            os.remove(file)
+                            print("arquivo removido com sucesso!")
+                            print("")
+                    sys.exit()
+                elif int(dia) < int(day) and int(mes_ext[mes]) <= int(month) and int(ano) <= int(year):
+                    print('Este processo ainda nao havia sido criado! Finalizando programa')
+                    datafile.close()
+                    local = os.getcwd()
+                    dir = os.listdir(local)
+                    for file in dir:
+                        if (file == "DJ-{}-{}.txt".format(numDj,anoAtual) or file == "DJ-{}-{}.pdf".format(numDj,anoAtual)):
+                            os.remove(file)
+                            print("arquivo removido com sucesso!")
+                            print("")
+                    sys.exit()
+            except IndexError:
+                print('')
+        if numeroLinha == 4:
+            try:
+                date = line.split(',')
+                date = date[2].strip()
+                dia, separador, mes, separador, ano = date.split(' ')
+                print('{}/{}/{}'.format(dia, mes_ext[mes], ano))
+                print(data_process)
+                if int(ano) < int(year):
+                    print('Este processo ainda nao havia sido criado! Finalizando programa')
+                    datafile.close()
+                    local = os.getcwd()
+                    dir = os.listdir(local)
+                    for file in dir:
+                        if (file == "DJ-{}-{}.txt".format(numDj,anoAtual) or file == "DJ-{}-{}.pdf".format(numDj,anoAtual)):
+                            os.remove(file)
+                            print("arquivo removido com sucesso!")
+                            print("")
+                    sys.exit()
+                elif int(mes_ext[mes]) < int(month) and int(ano) <= int(year):
+                    print('Este processo ainda nao havia sido criado! Finalizando programa')
+                    datafile.close()
+                    local = os.getcwd()
+                    dir = os.listdir(local)
+                    for file in dir:
+                        if (file == "DJ-{}-{}.txt".format(numDj,anoAtual) or file == "DJ-{}-{}.pdf".format(numDj,anoAtual)):
+                            os.remove(file)
+                            print("arquivo removido com sucesso!")
+                            print("")
+                    sys.exit()
+                elif int(dia) < int(day) and int(mes_ext[mes]) <= int(month) and int(ano) <= int(year):
+                    print('Este processo ainda nao havia sido criado! Finalizando programa')
+                    datafile.close()
+                    local = os.getcwd()
+                    dir = os.listdir(local)
+                    for file in dir:
+                        if (file == "DJ-{}-{}.txt".format(numDj,anoAtual) or file == "DJ-{}-{}.pdf".format(numDj,anoAtual)):
+                            os.remove(file)
+                            print("arquivo removido com sucesso!")
+                            print("")
+                    sys.exit()
+            except IndexError:
+                pass
+    search_word(path, search)
 
 if __name__ == '__main__':
   data_atual = str(datetime.now().date())
@@ -149,6 +180,7 @@ if __name__ == '__main__':
       for i in range(400,0,-1):
         numDj = i#int(input("Digite o numero do diario de justica: "))
         path = 'DJ-{}-{}.pdf'.format(numDj, anoAtual)
+        print('')
         print(path)
         get(path, search)
 
